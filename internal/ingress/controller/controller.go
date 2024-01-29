@@ -116,10 +116,11 @@ type Configuration struct {
 
 	IngressClassConfiguration *ingressclass.Configuration
 
-	ValidationWebhook         string
-	ValidationWebhookCertPath string
-	ValidationWebhookKeyPath  string
-	DisableFullValidationTest bool
+	ValidationWebhook            string
+	ValidationWebhookCertPath    string
+	ValidationWebhookKeyPath     string
+	DisableFullValidationTest    bool
+	DisablePathOverlapValidation bool
 
 	GlobalExternalAuth  *ngx_config.GlobalExternalAuth
 	MaxmindEditionFiles *[]string
@@ -402,7 +403,7 @@ func (n *NGINXController) CheckIngress(ing *networking.Ingress) error {
 	startTest := time.Now().UnixNano() / 1000000
 	_, servers, pcfg := n.getConfiguration(ings)
 
-	err = checkOverlap(ing, servers)
+	err = checkOverlap(ing, servers, n.cfg.DisablePathOverlapValidation)
 	if err != nil {
 		n.metricCollector.IncCheckErrorCount(ing.ObjectMeta.Namespace, ing.Name)
 		return err
@@ -1779,7 +1780,7 @@ func externalNamePorts(name string, svc *apiv1.Service) *apiv1.ServicePort {
 	}
 }
 
-func checkOverlap(ing *networking.Ingress, servers []*ingress.Server) error {
+func checkOverlap(ing *networking.Ingress, servers []*ingress.Server, disablePathOverlapValidation bool) error {
 	for _, rule := range ing.Spec.Rules {
 		if rule.HTTP == nil {
 			continue
@@ -1812,6 +1813,10 @@ func checkOverlap(ing *networking.Ingress, servers []*ingress.Server) error {
 				if existing.ObjectMeta.Namespace == ing.ObjectMeta.Namespace && existing.ObjectMeta.Name == ing.ObjectMeta.Name {
 					return nil
 				}
+			}
+
+			if disablePathOverlapValidation {
+				return nil
 			}
 
 			// path overlap. Check if one of the ingresses has a canary annotation
