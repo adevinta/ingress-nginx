@@ -111,10 +111,11 @@ type Configuration struct {
 
 	IngressClassConfiguration *ingressclass.IngressClassConfiguration
 
-	ValidationWebhook         string
-	ValidationWebhookCertPath string
-	ValidationWebhookKeyPath  string
-	DisableFullValidationTest bool
+	ValidationWebhook            string
+	ValidationWebhookCertPath    string
+	ValidationWebhookKeyPath     string
+	DisableFullValidationTest    bool
+	DisablePathOverlapValidation bool
 
 	GlobalExternalAuth  *ngx_config.GlobalExternalAuth
 	MaxmindEditionFiles *[]string
@@ -319,11 +320,14 @@ func (n *NGINXController) CheckIngress(ing *networking.Ingress) error {
 	startTest := time.Now().UnixNano() / 1000000
 	_, servers, pcfg := n.getConfiguration(ings)
 
-	err := checkOverlap(ing, allIngresses, servers)
-	if err != nil {
-		n.metricCollector.IncCheckErrorCount(ing.ObjectMeta.Namespace, ing.Name)
-		return err
+	if !n.cfg.DisablePathOverlapValidation {
+		err := checkOverlap(ing, allIngresses, servers)
+		if err != nil {
+			n.metricCollector.IncCheckErrorCount(ing.ObjectMeta.Namespace, ing.Name)
+			return err
+		}
 	}
+
 	testedSize := len(ings)
 	if n.cfg.DisableFullValidationTest {
 		_, _, pcfg = n.getConfiguration(ings[len(ings)-1:])
